@@ -3,7 +3,7 @@
 
 import { useState, useRef, ChangeEvent } from 'react';
 import Image from 'next/image';
-import { Download, Image as ImageIcon, Loader2, Sparkles, Wand2, Megaphone } from 'lucide-react';
+import { Download, Image as ImageIcon, Loader2, Sparkles, Wand2, Megaphone, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,7 @@ import { generateEditedImage } from '@/ai/flows/generate-edited-image';
 import { parseImageEditRequest } from '@/ai/flows/parse-image-edit-requests';
 import { getImageEditSuggestions } from '@/ai/flows/get-image-edit-suggestions';
 import { generateAd, GenerateAdOutput } from '@/ai/flows/generate-ad';
+import { generateSocialMediaPost, GenerateSocialMediaPostOutput } from '@/ai/flows/generate-social-media-post';
 
 // Helper function to read file as data URL
 const toBase64 = (file: File): Promise<string> =>
@@ -31,8 +32,10 @@ export function ImageEditor() {
   const [adText, setAdText] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [adContent, setAdContent] = useState<Omit<GenerateAdOutput, 'editedBase64Image'> | null>(null);
+  const [socialMediaPost, setSocialMediaPost] = useState<GenerateSocialMediaPostOutput | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
+  const [isGeneratingSocial, setIsGeneratingSocial] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -46,6 +49,7 @@ export function ImageEditor() {
         setSuggestions([]);
         setEditRequest('');
         setAdContent(null);
+        setSocialMediaPost(null);
         setAdText('');
       } catch (error) {
         console.error('Error reading file:', error);
@@ -97,6 +101,7 @@ export function ImageEditor() {
     setIsGenerating(true);
     setEditedImage(null);
     setAdContent(null);
+    setSocialMediaPost(null);
 
     try {
       const { instructions } = await parseImageEditRequest({ request: editRequest });
@@ -122,6 +127,7 @@ export function ImageEditor() {
     setIsGenerating(true);
     setEditedImage(null);
     setAdContent(null);
+    setSocialMediaPost(null);
 
     try {
       const { editedBase64Image, headline, adCopy } = await generateAd({
@@ -137,6 +143,30 @@ export function ImageEditor() {
       setIsGenerating(false);
     }
   };
+
+  const handleGenerateSocialMediaPost = async () => {
+    if (!adContent) {
+      toast({ title: 'No Ad Content', description: 'Please generate an ad first.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsGeneratingSocial(true);
+    setSocialMediaPost(null);
+    
+    try {
+      const result = await generateSocialMediaPost({
+        headline: adContent.headline,
+        adCopy: adContent.adCopy,
+      });
+      setSocialMediaPost(result);
+    } catch (error) {
+      console.error('Error generating social media post:', error);
+      toast({ title: 'Social Post Failed', description: 'Could not generate the social media post.', variant: 'destructive' });
+    } finally {
+      setIsGeneratingSocial(false);
+    }
+  };
+
 
   const handleDownload = () => {
     if (!editedImage) return;
@@ -227,7 +257,7 @@ export function ImageEditor() {
                       className="font-body text-base bg-transparent"
                     />
                   </div>
-                  <Button onClick={handleGenerateEdit} disabled={isLoading || !originalImage} className="w-full font-headline text-lg py-6">
+                  <Button onClick={handleGenerateEdit} disabled={isLoading || !originalImage} className="w-full font-headline text-lg py-6" variant="capsule">
                     {isGenerating && !adContent ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Sparkles className="mr-2 h-5 w-5" />}
                     Generate
                   </Button>
@@ -246,7 +276,7 @@ export function ImageEditor() {
                         className="font-body text-base bg-transparent"
                         />
                     </div>
-                     <Button onClick={handleGenerateAd} disabled={isLoading || !originalImage} className="w-full font-headline text-lg py-6">
+                     <Button onClick={handleGenerateAd} disabled={isLoading || !originalImage} className="w-full font-headline text-lg py-6" variant="capsule">
                         {isGenerating && adContent !== null ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Megaphone className="mr-2 h-5 w-5" />}
                         Generate Ad
                     </Button>
@@ -278,8 +308,23 @@ export function ImageEditor() {
                   <CardHeader>
                     <CardTitle className="font-headline text-2xl">{adContent.headline}</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-4">
                     <p className="font-body text-base">{adContent.adCopy}</p>
+                    <Button onClick={handleGenerateSocialMediaPost} disabled={isGeneratingSocial} variant="outline" className="w-full">
+                      {isGeneratingSocial ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      Generate Social Post
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+               {socialMediaPost && !isGeneratingSocial && (
+                <Card className="shadow-lg rounded-xl border-border/60 bg-card/80 backdrop-blur-xl animate-in fade-in">
+                  <CardHeader>
+                    <CardTitle className="font-headline text-2xl">Social Media Post</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="font-body text-base whitespace-pre-wrap">{socialMediaPost.post}</p>
+                    <p className="font-body text-sm text-muted-foreground">{socialMediaPost.hashtags}</p>
                   </CardContent>
                 </Card>
               )}
@@ -330,5 +375,3 @@ function ImageContainer({ title, imageSrc, isLoading = false, actionButton }: Im
     </div>
   );
 }
-
-    
